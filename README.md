@@ -1,5 +1,5 @@
 # Logger
-This is a basic and easy to use Logger for PHP projects. 
+This is a basic and easy to use Logger for PHP projects. I have been using it successfully for all of my web applications.
 
 ## Installation
 You only need to include one file in your project (`Logger.php`) to integrate it. No composer required.
@@ -20,6 +20,7 @@ Logger::error ("An error occured");
 ## Features
 * Logger can be used within any function or class method
 * Loglevels: OFF, ERROR, WARN, INFO, DEBUG, TRACE
+* Log level can be changed at runtime (e.g. if it needs to be set by URL parameter or from a config file)
 * Automatic log rotation when maximum file size is reached
 * Log messages can be mirrored to the browser (turn on / off / for single log message)
 * Tags can be added and removed at runtime to all following log messages (e.g. to identify multipe log messages belonging to the same instance)
