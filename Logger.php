@@ -9,6 +9,7 @@
  * Implemented as static class to enable easy usage without the need for dependency injection or use of global variables
  *
  * HISTORY:
+ * 18-MAR-2016 v1.10 Fix: setLogLevelByName() is no longer case sensitive
  * 05-FEB-2016 v1.9 Refactoring of logLevelNameToId(), logLevelIdToName()
  * 20-JAN-2016 v1.8 Bugfix: Wil now also log correctly when called in a destructor
  * 17-JAN-2016 v1.7 Added: MirrorToBrowser feature. Can be used globally or for each log statement
@@ -246,16 +247,16 @@ class Logger
 	static public function logLevelNameToId ($tag)
 	{	
 		$ids = array (
-			"System" => self::LEVEL_SYSTEM,
-			"Off" => self::LEVEL_OFF,
-			"Error" => self::LEVEL_ERROR,
-			"Warn" => self::LEVEL_WARN,
-			"Info" => self::LEVEL_INFO,
-			"Debug" => self::LEVEL_DEBUG,
-			"Trace" => self::LEVEL_TRACE
+			"system" => self::LEVEL_SYSTEM,
+			"off" => self::LEVEL_OFF,
+			"error" => self::LEVEL_ERROR,
+			"warn" => self::LEVEL_WARN,
+			"info" => self::LEVEL_INFO,
+			"debug" => self::LEVEL_DEBUG,
+			"trace" => self::LEVEL_TRACE
 		);
 			
-		return array_key_exists ($tag, $ids) ? $ids[$tag] : self::LEVEL_INFO;	
+		return array_key_exists (strtolower($tag), $ids) ? $ids[strtolower($tag)] : self::LEVEL_INFO;	
 	}
 }
 ?>
