@@ -9,6 +9,7 @@
  * Implemented as static class to enable easy usage without the need for dependency injection or use of global variables
  *
  * HISTORY:
+ * 23-MAR-2016 v1.11 Fix: <span> tag for yellow markup was send to browser even if not used
  * 18-MAR-2016 v1.10 Fix: setLogLevelByName() is no longer case sensitive
  * 05-FEB-2016 v1.9 Refactoring of logLevelNameToId(), logLevelIdToName()
  * 20-JAN-2016 v1.8 Bugfix: Wil now also log correctly when called in a destructor
@@ -175,10 +176,9 @@ class Logger
 			}
 			
 			// output to browser if requested
-			if ( ($logLevel == self::LEVEL_ERROR) || ($logLevel == self::LEVEL_WARN) ) echo '<span style="background:yellow; color:black">';
-			if (self::$mirrorToBrowser) echo '<span style="font-family: monospace; font-size:1.1em">' . $output . '</span><br>';
-			if ($mirror) echo '<span style="font-family: monospace; font-size:1.1em">[' . self::logLevelIdToName ($logLevel) . '] '. $msg . '</span><br>';
-			if ( ($logLevel == self::LEVEL_ERROR) || ($logLevel == self::LEVEL_WARN) ) echo '</span>';
+			if ( ($logLevel == self::LEVEL_ERROR) || ($logLevel == self::LEVEL_WARN) ) $markup ="background:yellow; color:black;"; else $markup="";
+			if (self::$mirrorToBrowser) echo '<span style="font-family: monospace; font-size:1.1em;{$markup}">' . $output . '</span><br>';
+			if ($mirror) echo '<span style="font-family: monospace; font-size:1.1em;{$markup}">[' . self::logLevelIdToName ($logLevel) . '] '. $msg . '</span><br>';
 		}
 	}
 	
