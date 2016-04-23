@@ -9,6 +9,7 @@
  * Implemented as static class to enable easy usage without the need for dependency injection or use of global variables
  *
  * HISTORY:
+ * 23-APR-2016 v1.12 Fix: setLogLevel will now only log the new lovLevel if it actually has been changed
  * 23-MAR-2016 v1.11 Fix: <span> tag for yellow markup was send to browser even if not used
  * 18-MAR-2016 v1.10 Fix: setLogLevelByName() is no longer case sensitive
  * 05-FEB-2016 v1.9 Refactoring of logLevelNameToId(), logLevelIdToName()
@@ -89,6 +90,7 @@ class Logger
 	static public function setLogLevel ($logLevel)
 	{
 		$success = false;
+		$oldLogLevel = self::$logLevel;
 		
 		switch ($logLevel)
 		{
@@ -107,7 +109,7 @@ class Logger
 				break;
 		}
 		
-		self::system ("Loglevel set to " . self::logLevelIdToName($logLevel));
+		if ($oldLogLevel != self::$logLevel) self::system ("Loglevel set to " . self::logLevelIdToName($logLevel));
 		
 		return $success;	
 	}
