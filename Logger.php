@@ -3,12 +3,13 @@
 /*
  * Logger.php
  *
- * Copyright(C) 2015 Erik Kalkoken
+ * Copyright(C) 2015-17 Erik Kalkoken
  *
  * Class for handling logging in a php script. 
  * Implemented as static class to enable easy usage without the need for dependency injection or use of global variables
  *
  * HISTORY:
+ * 14-MAR-2017 v1.13 Change: code overhaul: changed log() to public, added input validations and comments, refactoring
  * 23-APR-2016 v1.12 Fix: setLogLevel will now only log the new lovLevel if it actually has been changed
  * 23-MAR-2016 v1.11 Fix: <span> tag for yellow markup was send to browser even if not used
  * 18-MAR-2016 v1.10 Fix: setLogLevelByName() is no longer case sensitive
@@ -24,144 +25,258 @@
  * 28-DEC-2015 v1.0 First working version
  *
  * USAGE:
- * Logger::initialize ("myapplication.log", Logger::LEVEL_INFO);	// Initialized the logger, should be called once
- * Logger::error ("An error occured");	// Outputs a message on ERROR level to the log
- * 
+ * Logger::initialize("myapplication.log", Logger::LEVEL_INFO);		// Initialized the logger, should be called once
+ * Logger::error("An error occured");								// Outputs a message on ERROR level to the log
+ *
+ * OUTPUT:
+ * [yyyy-mm-dd hh:ii:ss] [Level] {Tag} Script_name.php: <class::method> (area) This is the log message
+ * Note: {Tag} and (area) are optional, class and method are only shown at log level DEBUG or TRACE
+ *
 **/
 
 
 class Logger
 {
-	const LEVEL_SYSTEM = 1;	// for log messages that always need to be shown, but are not an error
-	const LEVEL_OFF = 2;	
-	const LEVEL_ERROR = 3;
-	const LEVEL_WARN = 4;
-	const LEVEL_INFO = 5;
-	const LEVEL_DEBUG = 6;
-	const LEVEL_TRACE = 7;
-		
-	const LOGGER_DATEFORMAT = "Y-m-d H:i:s";
-	const MAX_FILESIZE = 51200;	// in kilobytes, default is 50 MB
+	// for log messages that always need to be shown, regardless of the current log level
+	const LEVEL_SYSTEM = 1;	
 	
-	static private $logLevel = self::LEVEL_INFO;
-	static private $fileName = "logfile.log";
+	// turns off logging
+	const LEVEL_OFF = 2;	
+	
+	// errors level
+	const LEVEL_ERROR = 3;
+	
+	// warnings level
+	const LEVEL_WARN = 4;
+	
+	// info level
+	const LEVEL_INFO = 5;
+	
+	// debug level
+	const LEVEL_DEBUG = 6;
+	
+	// trace level
+	const LEVEL_TRACE = 7;
+	
+	// list of all available log levels
+	const LOG_LEVELS = [
+		self::LEVEL_SYSTEM,
+		self::LEVEL_OFF,
+		self::LEVEL_ERROR,
+		self::LEVEL_WARN,
+		self::LEVEL_INFO,
+		self::LEVEL_DEBUG,
+		self::LEVEL_TRACE,
+	];
+	
+	// default log level used, e.g. when initialization is not done
+	const DEFAULT_LOG_LEVEL = self::LEVEL_INFO;
+	
+	// default file name for log output
+	const DEFAULT_FILE_NAME = "logfile.log";
+		
+	// default max size of a logfile in KB, logfiles will be rotated when they reach this threshold
+	const DEFAULT_MAX_FILESIZE = 51200;
+	
+	// output format for Logger timestamp 
+	const LOGGER_DATEFORMAT = "Y-m-d H:i:s";
+	
+	// current log level
+	static private $logLevel = self::DEFAULT_LOG_LEVEL;
+	
+	// filename of log file
+	static private $fileName = self::DEFAULT_FILE_NAME;
+	
+	// flag to indicate wether the Logger was initialized
 	static private $initialized = false;
-	static private $tags = null;		// optional tag that will added to every log message
+	
+	// optional tags that will be added to every log message, e.g. current session ID
+	static private $tags = null;		
+	
+	// flag indicating if the logger is turned on or off
 	static private $activated = true;
-	static private $showCallerFunction = false;	// dont usually show function names
-	static private $max_filesize = self::MAX_FILESIZE;
+	
+	// flag to indicate if caller function should be shown along the log message
+	static private $showCallerFunction = false;	
+	
+	// current max filesize for the current log file
+	static private $maxFilesize = self::DEFAULT_MAX_FILESIZE;
+	
+	// flag to indicate if all log messages are mirrored to the browser
 	static private $mirrorToBrowser = false;
 	
-	// Pseudo contructor
-	
-	static public function initialize ($fileName, $logLevel = self::LEVEL_INFO, $max_filesize=null)
+	// Initializes the Logger with a filename and log level
+	// Should be called at the beginning of each programm to clearly define the Logger
+	// If not used the Logger will write to the default log file with the default log level
+	public static function initialize( $fileName, $logLevel = self::DEFAULT_LOG_LEVEL, $maxFilesize = null )
 	{
-		self::$fileName = getcwd () . "/" . $fileName;
+		// input validation
+		if (is_null($fileName) || !is_string($fileName) || (strlen($fileName) == 0) ) throw new InvalidArgumentException("fileName must be string and can not be null or empty");
+		
+		if (!in_array($logLevel, self::LOG_LEVELS)) throw new InvalidArgumentException("Invalid logLevel '$logLevel'");
+		
+		// set filename for log file
+		self::$fileName = @getcwd () . "/" . $fileName;
+		if (self::$fileName === false) throw new RuntimException("Failed to get the current path");
+		
 		self::$logLevel = $logLevel;
 		self::$initialized = true;
-		if (isset($max_filesize)) self::$max_filesize = $max_filesize;
+		if ( isset($maxFilesize) && is_numeric($maxFilesize) && ($maxFilesize > 0) ) self::$maxFilesize = $maxFilesize;
 		
-		// rotate file if too big
-		$size = intval (@filesize (self::$fileName) / 1024);
-		
-		if ( ($size !== false) && ($size > self::$max_filesize) )
+		// rotate log file if too big
+		$size = ceil(@filesize (self::$fileName) / 1024);		
+		if ($size > self::$maxFilesize)
 		{
 			// new name is old name + timestamp + .log
 			$path = pathinfo(self::$fileName, PATHINFO_DIRNAME);			
 			$path = ($path == ".") ? "" : str_replace('\\', '/', $path) . "/";		// don't use current directory for path, also need to convert backslashes to make it system agnostic
 			$newname = $path . pathinfo(self::$fileName, PATHINFO_FILENAME) . "_" . date ("YmdHis") . ".log";
 		
-			if (@rename (self::$fileName, $newname) === true)
+			if (@rename(self::$fileName, $newname) === true)
 			{
-				self::system ("Previous logfile had exceeded the size limit of " . self::$max_filesize ." KB and has been renamed to '" . $newname ."'");
+				self::system("Previous logfile had exceeded the size limit of " . self::$maxFilesize ." KB and has been renamed to '" . $newname ."'");
 			}
-			
 		}
 	}
 	
-	// getter and setter
-	static public function getFileName () {	return self::$fileName;	}	
-	static public function getInitialised () {	return self::$initialized;	}
-	static public function getMirrorToBrowser () {	return self::$mirrorToBrowser;	}
-	static public function setMirrorToBrowser ($value) { self::$mirrorToBrowser = $value; }
-	static public function getLogLevelId () { return self::$logLevel; }
-	static public function getLogLevelName () {	return self::logLevelIdToName(self::$logLevel);	}
-	static public function setLogLevelByName ($name) { return self::setLogLevel (self::logLevelNameToId ($name)); }
-	static public function setLogLevel ($logLevel)
-	{
-		$success = false;
-		$oldLogLevel = self::$logLevel;
-		
-		switch ($logLevel)
+	// getter
+	public static function getFileName() 			{ return self::$fileName; }	
+	public static function getInitialised() 		{ return self::$initialized; }
+	public static function isInitialised() 			{ return self::$initialized; }
+	public static function getMirrorToBrowser() 	{ return self::$mirrorToBrowser; }
+	public static function getLogLevel() 			{ return self::$logLevel; }
+	public static function getLogLevelId() 			{ return self::$logLevel; }
+	public static function getLogLevelName() 		{ return self::logLevelIdToName(self::getLogLevel()); }
+	public static function getTags() 				{ return self::$tags; }
+	
+	// setters
+	public static function setActivated( $value ) 			{ self::$activated = boolval($value); }
+	public static function setMirrorToBrowser( $value ) 	{ self::$mirrorToBrowser = boolval($value); }
+	public static function setLogLevelByName( $name ) 		{ return self::setLogLevel(self::logLevelNameToId($name)); }
+	
+	// sets the log level
+	// will generate a syste log entry if log level is effectively changed
+	// returns true if change was successful (incl. no change) or false on error
+	public static function setLogLevel( $logLevel )
+	{		
+		$oldLogLevel =self::getLogLevel();
+		if (in_array($logLevel, self::LOG_LEVELS))
 		{
-			case self::LEVEL_OFF:
-			case self::LEVEL_ERROR:
-			case self::LEVEL_WARN:
-			case self::LEVEL_INFO:
-			case self::LEVEL_DEBUG:
-			case self::LEVEL_TRACE:
-				self::$logLevel = $logLevel;
-				$success = true;
-				break;
-			
-			default:
-				$success = false;
-				break;
+			self::$logLevel = $logLevel;
+			$success = true;
+		}
+		else
+		{
+			$success = false;
 		}
 		
-		if ($oldLogLevel != self::$logLevel) self::system ("Loglevel set to " . self::logLevelIdToName($logLevel));
-		
+		if ($oldLogLevel != self::getLogLevel()) self::system("Loglevel set to " . self::logLevelIdToName($logLevel));
+
 		return $success;	
 	}
-
-	static public function getTags () {	return self::$tags; }
-	static public function addTag ($tag) { self::$tags[] = $tag; }
-	static public function removeTag ($tag)
-	{
-		$id = array_search ($tag, self::$tags);
-		
-		if($id !== false) unset (self::$tags[$id]);
-	}
 	
-	static public function setShowCallerFunction($value)
+	// sets the caller function
+	// will generate a system log entry about the change
+	public static function setShowCallerFunction( $value )
 	{	
 		self::system ("Show caller functions is set to: " . var_export ($value, true));
 		self::$showCallerFunction = filter_var($value, FILTER_VALIDATE_BOOLEAN);
 	}
 	
 	// methods
-	static public function system ($msg, $area=null, $mirror=null)	{ self::log ($msg, self::LEVEL_SYSTEM, $area, $mirror); }	
-	static public function error ($msg, $area=null, $mirror=null) 	{ self::log ($msg, self::LEVEL_ERROR, $area, $mirror); }	
-	static public function warn ($msg, $area=null, $mirror=null) 	{ self::log ($msg, self::LEVEL_WARN, $area, $mirror); }	
-	static public function info ($msg, $area=null, $mirror=null) 	{ self::log ($msg, self::LEVEL_INFO, $area, $mirror); }	
-	static public function debug ($msg, $area=null, $mirror=null)	{ self::log ($msg, self::LEVEL_DEBUG, $area, $mirror); }	
-	static public function trace ($msg, $area=null, $mirror=null) 	{ self::log ($msg, self::LEVEL_TRACE, $area, $mirror); }
 	
-	static private function log ($msg, $logLevel, $area, $mirror)
+	// turns off / pauses logging
+	public static function turnOff() { self::setActivated(false); }
+	
+	// turns on logging
+	public static function turnOn()  { self::setActivated(true);}
+	
+	// adds a tag to the Logger
+	// multipe tags are possible, but the same tag can only be used once
+	// returns true on success and false on error
+	public static function addTag( $tag ) 
+	{ 
+		if (is_null(self::getTags()) || !in_array($tag, self::getTags()))
+		{
+			self::$tags[] = $tag; 
+			return true;
+		}
+		else
+		{
+			return false;
+		}
+	}
+	
+	// removes an existing tag from the Logger
+	// returns true if the tag was removed
+	// returns false if the tag was not found
+	public static function removeTag( $tag )
 	{
-		if (self::$activated && (self::$logLevel >= $logLevel) )
+		$id = array_search($tag, !is_null(self::getTags()) ? self::getTags() : []);
+		if($id !== false)
+		{
+			unset(self::$tags[$id]);
+			return true;
+		}
+		else
+		{
+			return false;
+		}
+	}
+	
+	// returns an array of all supported log levels as names
+	public static function getSupportedLogLevels()
+	{
+		$list = array();
+		for ($i=self::LEVEL_ERROR; $i<=self::LEVEL_TRACE; $i++)
+		{
+			$list[]=self::logLevelIdToName($i);
+		}
+		return $list;
+	}
+		
+	// generate a log message with the respective log level
+	// $msg: the log message
+	// $area: to add an optional tag to the log message (optional)
+	// $mirror: will mirror the current log message to the browser if true, default is false (optional)
+	public static function system( $msg, $area = null, $mirror = false )	{ self::log ($msg, self::LEVEL_SYSTEM, $area, $mirror); }	
+	public static function error( $msg, $area = null, $mirror = false ) 	{ self::log ($msg, self::LEVEL_ERROR, $area, $mirror); }	
+	public static function warn( $msg, $area = null, $mirror = false ) 	{ self::log ($msg, self::LEVEL_WARN, $area, $mirror); }	
+	public static function info( $msg, $area = null, $mirror = false ) 	{ self::log ($msg, self::LEVEL_INFO, $area, $mirror); }	
+	public static function debug( $msg, $area = null, $mirror = false )	{ self::log ($msg, self::LEVEL_DEBUG, $area, $mirror); }	
+	public static function trace( $msg, $area = null, $mirror = false ) 	{ self::log ($msg, self::LEVEL_TRACE, $area, $mirror); }
+	
+	public static function log( $msg, $logLevel = self::DEFAULT_LOG_LEVEL, $area = null, $mirror = false )
+	{
+		// validate input for $msg
+		if (is_null($msg) || !is_string($msg) || (strlen($msg) == 0) ) throw new InvalidArgumentException("msg must be string and can not be null or empty");
+		
+		// validate input for $loglevel
+		if (!in_array($logLevel, self::LOG_LEVELS)) throw new InvalidArgumentException("Invalid logLevel '$logLevel'");
+		
+		// validate input for $area
+		if (!is_null($area) && ( !is_string($area) || (strlen($area) == 0) ) ) throw new InvalidArgumentException("area must be string and can not be empty");
+		
+		// validate input for $mirror
+		if (!is_bool($mirror)) throw new InvalidArgumentException("mirror must be boolean");
+		
+		if (self::$activated && (self::getLogLevel() >= $logLevel) )
 		{		
-			// just for debug
-			/*
-			$trace = debug_backtrace();			
-			echo '<b>' . $msg . '</b><br>';
-			var_dump ($trace);	
-			echo '<br>';
-			*/
-			
 			$output = "[" . date(self::LOGGER_DATEFORMAT) . "] ";
 			$output .= "[" . self::logLevelIdToName ($logLevel) . "] ";
 			
-			if (isset (self::$tags))
+			if ( self::getTags() !== null )
 			{
-				foreach (self::$tags as $tag) $output .= "{" . $tag . "} ";
+				foreach (self::getTags() as $tag) $output .= "{" . $tag . "} ";
 			}	
 			
 			$trace = debug_backtrace();
 			$output .= self::getTraceFilename ($trace) . ": ";
 			
 			// Function names will ony be shown when loglevel is set to debug or trace or show caller function is set to true
-			if ( ( (self::$logLevel == self::LEVEL_DEBUG) || (self::$logLevel == self::LEVEL_TRACE) ) || (self::$showCallerFunction === true) )
+			if ( ( (self::getLogLevel() == self::LEVEL_DEBUG) 
+				|| (self::getLogLevel() == self::LEVEL_TRACE) ) 
+					|| (self::$showCallerFunction === true) )
 			{
 				$output .= self::getTraceFunctionName ($trace);		
 			}
@@ -172,19 +287,28 @@ class Logger
 			}	
 			
 			$output .= $msg . PHP_EOL;
-			if ( @file_put_contents (self::$fileName, $output, FILE_APPEND) === false)
+			if (@file_put_contents (self::getFileName(), $output, FILE_APPEND) === false)
 			{
-				trigger_error ("Can not write into log file with name '" . self::$fileName . "'", E_USER_ERROR);
+				throw new RuntimException("Can not write into log file with name '" . self::getFileName() . "'");
 			}
 			
 			// output to browser if requested
-			if ( ($logLevel == self::LEVEL_ERROR) || ($logLevel == self::LEVEL_WARN) ) $markup ="background:yellow; color:black;"; else $markup="";
-			if (self::$mirrorToBrowser) echo '<span style="font-family: monospace; font-size:1.1em;{$markup}">' . $output . '</span><br>';
-			if ($mirror) echo '<span style="font-family: monospace; font-size:1.1em;{$markup}">[' . self::logLevelIdToName ($logLevel) . '] '. $msg . '</span><br>';
+			$markup = ( ($logLevel == self::LEVEL_ERROR) || ($logLevel == self::LEVEL_WARN) )
+				? "background:yellow; color:black;"
+				: "";			
+			if (self::$mirrorToBrowser)
+			{
+				echo '<span style="font-family: monospace; font-size:1.1em;' . $markup . '">' . $output . '</span><br>';
+			}
+			if ($mirror)
+			{
+				echo '<span style="font-family: monospace; font-size:1.1em;' . $markup . '">[' . self::logLevelIdToName ($logLevel) . '] '. $msg . '</span><br>';
+			}
 		}
 	}
 	
-	static private function getTraceFilename ($trace)
+	// returns the name of the current script from trace
+	private static function getTraceFilename( $trace )
 	{
 		$filename = "";
 		
@@ -200,25 +324,15 @@ class Logger
 		return $filename;
 	}
 	
-	static public function getSupportedLogLevels()
+	// returns the current function name from trace
+	private static function getTraceFunctionName( $trace )
 	{
-		$list = array();
-		for ($i=self::LEVEL_ERROR; $i<=self::LEVEL_TRACE; $i++)
-		{
-			$list[]=self::logLevelIdToName($i);
-		}
-		return $list;
-	}
-	
-	static private function getTraceFunctionName ($trace)
-	{
-		
 		$functionName = "";
 		
-		if ( count ($trace) >= 3 )
+		if ( count($trace) >= 3 )
 		{
 			$functionName = "<";
-			if ( isset ($trace[2]['class']) )
+			if ( isset($trace[2]['class']) )
 			{
 				$functionName .= $trace[2]['class'] . '::';
 			}
@@ -228,10 +342,8 @@ class Logger
 		return $functionName;
 	}
 	
-	static public function turnOff () { self::$activated = false; }
-	static public function turnOn ()  { self::$activated = true;	}
-	
-	static public function logLevelIdToName ($id)
+	// return the name for a log level ID or "undefined" if the log level is invalid
+	public static function logLevelIdToName($id)
 	{	
 		$tags = array (
 			self::LEVEL_SYSTEM => "System",
@@ -243,10 +355,11 @@ class Logger
 			self::LEVEL_TRACE => "Trace"
 		);
 			
-		return array_key_exists ($id, $tags) ? $tags[$id] : "undefined";	
+		return array_key_exists($id, $tags) ? $tags[$id] : "undefined";	
 	}
 	
-	static public function logLevelNameToId ($tag)
+	// return the log level ID for a log level name, or the default log level if the name is not found
+	public static function logLevelNameToId($tag)
 	{	
 		$ids = array (
 			"system" => self::LEVEL_SYSTEM,
@@ -258,7 +371,7 @@ class Logger
 			"trace" => self::LEVEL_TRACE
 		);
 			
-		return array_key_exists (strtolower($tag), $ids) ? $ids[strtolower($tag)] : self::LEVEL_INFO;	
+		return array_key_exists(strtolower($tag), $ids) ? $ids[strtolower($tag)] : self::DEFAULT_LOG_LEVEL;	
 	}
 }
 ?>

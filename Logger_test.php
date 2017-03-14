@@ -15,15 +15,14 @@ require_once 'Logger.php';
 
 Class TestClass
 {
-	public function wantToLog ()
+	public function wantToLog ($area=null)
 	{
-		Logger::system ("System Entry");
-		Logger::error ("Error Entry");
-		Logger::warn ("Warning Entry");
-		Logger::info ("Info Entry");
-		Logger::debug ("Debug Entry");
-		Logger::trace ("Trace Entry");
-		Logger::system ("");
+		Logger::system ("System Entry", $area);
+		Logger::error ("Error Entry", $area);
+		Logger::warn ("Warning Entry", $area);
+		Logger::info ("Info Entry", $area);
+		Logger::debug ("Debug Entry", $area);
+		Logger::trace ("Trace Entry", $area);
 	}
 }
 
@@ -94,7 +93,6 @@ Logger::info ("Info Entry");
 Logger::debug ("Debug Entry");
 Logger::trace ("Trace Entry");
 
-Logger::system ("");
 Logger::system ("--------> Test 2: Testing tags and area feature");
 
 Logger::addTag ("Special Forces");
@@ -106,7 +104,6 @@ Logger::removeTag ("UN piece keeping forces");
 Logger::info ("Afganistan", "North-Area");
 Logger::removeTag ("Special Forces");
 
-Logger::system ("");
 Logger::system ("--------> Test 3: Testing function calls");
 
 $tmp = new TestClass();
@@ -154,7 +151,6 @@ Logger::setShowCallerFunction(false);
 Logger::setLogLevelByName ("info");
 $tmp->wantToLog();
 
-Logger::system ("");
 Logger::system ("--------> Test 4: Utility functions");
 
 echo Logger::logLevelIdToName (Logger::getLogLevelId()) . "<br>";
@@ -162,11 +158,15 @@ echo Logger::logLevelIdToName (Logger::getLogLevelId()) . "<br>";
 $testclass = new TestClass();
 $testclass -> wantToLog ();
 
+Logger::system ("--------> Test 5: Tags + Area + Debug logging");
+var_dump(Logger::addTag ("Special Forces"));
+Logger::setShowCallerFunction(true);
 
-Logger::system ("");
+$testclass = new TestClass();
+$testclass -> wantToLog ("South Africa");
+
 Logger::system ("Log test finsihed =================>");
-Logger::system ("");
-Logger::system ("");
+
 
 ?>
 
