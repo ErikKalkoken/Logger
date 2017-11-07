@@ -9,6 +9,8 @@
  * Implemented as static class to enable easy usage without the need for dependency injection or use of global variables
  *
  * HISTORY:
+ * 06-AUG-2017 v1.15 New: added new method addUniqueId()
+ * 22-MAR-2017 v1.14 Fix: validation for area did not work proberly
  * 14-MAR-2017 v1.13 Change: code overhaul: changed log() to public, added input validations and comments, refactoring
  * 23-APR-2016 v1.12 Fix: setLogLevel will now only log the new lovLevel if it actually has been changed
  * 23-MAR-2016 v1.11 Fix: <span> tag for yellow markup was send to browser even if not used
@@ -207,6 +209,17 @@ class Logger
 		}
 	}
 	
+	// add an unique ID as tagto be used for distinguiding logging between parallel instances
+	// returns id if successful (needed for potential later removal)
+	// returns false on error
+	public static function addUniqueId()
+	{
+		$id = hash("md5", uniqid(rand(), true));
+		$response = self::addTag($id);
+		if ($response !== false) return $id;
+		else return false;
+	}
+	
 	// removes an existing tag from the Logger
 	// returns true if the tag was removed
 	// returns false if the tag was not found
@@ -255,7 +268,7 @@ class Logger
 		if (!in_array($logLevel, self::LOG_LEVELS)) throw new InvalidArgumentException("Invalid logLevel '$logLevel'");
 		
 		// validate input for $area
-		if (!is_null($area) && ( !is_string($area) || (strlen($area) == 0) ) ) throw new InvalidArgumentException("area must be string and can not be empty");
+		// if (!is_null($area) && ( !is_string($area) || (strlen($area) == 0) ) ) throw new InvalidArgumentException("area must be string and can not be empty");
 		
 		// validate input for $mirror
 		if (!is_bool($mirror)) throw new InvalidArgumentException("mirror must be boolean");
