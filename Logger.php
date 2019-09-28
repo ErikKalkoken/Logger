@@ -1,19 +1,19 @@
 <?php
-
 /*
  * Logger.php
  *
- * Copyright(C) 2015-17 Erik Kalkoken
+ * Copyright(C) 2015-19 Erik Kalkoken
  *
  * Class for handling logging in a php script. 
  * Implemented as static class to enable easy usage without the need for dependency injection or use of global variables
  *
  * HISTORY:
+ * 28-SEP-2019 v1.19 Fix: Remove error suppression for get filesize
  * 27-DEC-2018 v1.18 Fix: Typo in RuntimeException
  * 15-SEP-2017 v1.17 Fix: filesize throws exception if file does not exist, some refactoring
  * 23-JAN-2017 v1.16 New: added new method getUniqueId()
  * 06-AUG-2017 v1.15 New: added new method addUniqueId()
- * 22-MAR-2017 v1.14 Fix: validation for area did not work proberly
+ * 22-MAR-2017 v1.14 Fix: validation for area did not work properly
  * 14-MAR-2017 v1.13 Change: code overhaul: changed log() to public, added input validations and comments, refactoring
  * 23-APR-2016 v1.12 Fix: setLogLevel will now only log the new lovLevel if it actually has been changed
  * 23-MAR-2016 v1.11 Fix: <span> tag for yellow markup was send to browser even if not used
@@ -31,7 +31,7 @@
  *
  * USAGE:
  * Logger::initialize("myapplication.log", Logger::LEVEL_INFO);		// Initialized the logger, should be called once
- * Logger::error("An error occured");								// Outputs a message on ERROR level to the log
+ * Logger::error("An error occurred");								// Outputs a message on ERROR level to the log
  *
  * OUTPUT:
  * [yyyy-mm-dd hh:ii:ss] [Level] {Tag} Script_name.php: <class::method> (area) This is the log message
@@ -160,7 +160,7 @@ class Logger
 		// rotate log file if too big
 		try
 		{
-			$size = ceil(@filesize(self::$fileName) / 1024);
+			$size = ceil(filesize(self::$fileName) / 1024);
 		}
 		catch (Exception $ex)
 		{
@@ -310,7 +310,7 @@ class Logger
 	}
 	
 	// adds a tag to the Logger
-	// multipe tags are possible, but the same tag can only be used once
+	// multiple tags are possible, but the same tag can only be used once
 	// returns true on success and false on error
 	public static function addTag( $tag ) 
 	{ 
@@ -326,7 +326,7 @@ class Logger
 		}
 	}
 	
-	// add an unique ID as tagto be used for distinguiding logging between parallel instances
+	// add an unique ID for distinguishing logging between parallel instances
 	// returns id if successful (needed for potential later removal)
 	// returns false on error
 	public static function addUniqueId()
@@ -562,4 +562,3 @@ class Logger
 			: self::DEFAULT_LOG_LEVEL;	
 	}
 }
-?>
